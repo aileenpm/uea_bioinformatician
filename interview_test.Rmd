@@ -1,0 +1,291 @@
+---
+title: "interview_test.Rmd"
+author: "Aileen"
+date: "2025-11-14"
+output: html_document
+---
+
+# Part 1
+## Task
+
+Determine the number of sock pairs from the following pile:
+
+pile = [3,3,1,2,3,2,1,3,2,3,1,3,3,1,3,1,1,2,2,2]
+
+
+```{r load libraries}
+library(tidyverse)
+library(tibble)
+library(purrr)
+library(knitr)
+```
+
+
+```{r calculation}
+# Set pile
+pile <- c(3,3,1,2,3,2,1,3,2,3,1,3,3,1,3,1,1,2,2,2)
+
+colour_freq <- table(pile) #table() gives a summary of the frequencies of sock colours (1,2,3) in the pile
+
+colour_freq
+```
+
+```{r}
+n_pairs <- colour_freq %/% 2 %>%   # divide the frequencies by 2 to get complete pairs
+  sum()   # get sum of sock pairs
+
+print(paste0("Total pairs of socks = ", n_pairs))
+```
+
+Create a function for next part:
+
+```{r}
+# Create function get_n_pairs()
+get_n_pairs <- function(pile){
+  
+  colour_freq <- table(pile)
+  
+  n_pairs <- colour_freq %/% 2 %>%
+    sum()
+  
+  return(n_pairs)
+  
+}
+
+# Apply function
+get_n_pairs(pile)
+
+```
+
+
+# Part 2 - Simulation
+
+*Create a simulated dataset with 100 independent samplings, from n = 3 different colours of socks, with a sample size of 20, and determine the number of pairs in each pile.*
+
+
+```{r generate dataset}
+# Set seed
+set.seed(123)
+
+# Create simulated dataset for n=3
+
+# generate random values from 1-3 sock colours, 20 times per pile, and repeated 100 times to generate 100 piles
+sock_colours <- replicate(100, round(runif(20, 1,3),0), simplify = FALSE) 
+
+# label each pile
+pile_num <- 1:100 
+
+# combine into a tibble dataframe
+
+sim_dataset_n3 <- tibble(
+  pile_colours = sock_colours, 
+  pile_num = pile_num)
+
+# print simulated dataset
+sim_dataset_n3 %>% 
+  head() %>% 
+  knitr::kable()
+
+```
+
+
+```{r calculate}
+# Apply get_n_pairs() function to each list in pile_colours column to get total pairs (n_pairs column)
+
+sim_dataset_n3_totalsocks <- sim_dataset_n3 %>% 
+  dplyr::mutate(n_pairs = purrr::map_int(pile_colours, get_n_pairs)) 
+
+
+sim_dataset_n3_totalsocks %>% 
+  head() %>% 
+  knitr::kable()
+
+```
+
+
+*Repeat the sampling for different number of sock colours in each pool from n = 3 to n = 18 with step size of 3.*
+
+```{r generate new dataset}
+# Set seed
+set.seed(123)
+
+# Generate new dataset with more sock colours per pile
+n_colours <- seq(3,18,3) # get number of sock colours from 3 to 18 with step size of 3
+
+# make empty list for dataset
+sock_colours <- list()
+
+# populate with sock colours (20 colours per pile)
+for (n in n_colours){
+  sock_colours <- c(sock_colours, replicate(100, round(runif(20, 1, n),0), simplify = FALSE))
+}
+
+# annotate piles
+n_colour <- rep(seq(3,18,3), each = 100)
+pile_num <- rep(1:100, times = 6)
+
+# combine into tibble dataset
+
+sim_dataset <- tibble(
+  sock_colours,
+  n_colour,
+  pile_num
+)
+
+sim_dataset %>% 
+  head(20) %>% 
+  knitr::kable()
+
+```
+
+
+```{r}
+# calculate total pairs
+sim_dataset_results <- sim_dataset %>% 
+  dplyr::mutate(n_pairs = purrr::map_int(sock_colours, get_n_pairs))
+
+# show table summary (without sock_colours column)
+sim_dataset_results %>% 
+  select(-c(sock_colours)) %>% 
+  summary() %>% 
+  knitr::kable("html")
+```
+
+
+*Visualise how the number of pairs varies as the pools of different colours increase.*
+
+```{r}
+# Create boxplot to illustrate distribution of total pairs per n_colour
+
+sim_dataset_results %>% 
+  dplyr::mutate(n_colour = as.factor(n_colour)) %>% 
+  ggplot(aes(x = n_colour, y = n_pairs, colour = n_colour)) +
+  geom_boxplot() +
+  geom_jitter(height = 0, width = 0.3, alpha = 0.3)+ # add jitter for visualization
+  stat_summary(fun.y=mean, geom="point", shape=18, size=5, color="black")+ # visualize mean total pairs per n_colour
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  labs(title = "Distribution of total pairs against number of sock colours per pool",
+    x = "Number of colours per pool, n",
+       y = "Number of total sock pairs per pile",
+       colour = "Pool colour (n)")
+
+```
+
+The boxplot above shows the distribution of total pairs in each sampled pile, with the average total pairs per n_colour (number of colours in pool) shown with the black diamond point.
+
+
+
+*1. Is there a relationship between the number of colours to select from and the average number of pairs.*
+
+There is a visual negative relationship between the number of colours in the pool and the average number of pairs in the sampled pile. 
+
+
+*2. Perform a statistical test to examine this.*
+
+There are two statistical approaches I can take, one where I treat the number of colours in the pool as an independent "categorical" factor, and test whether the mean number of pairs are different between the groups (ANOVA), or I use linear regression to estimate how the number of pairs changes as the number of colours increases. 
+
+Here, I'm choosing to use linear regression to estimate the trend (relationship between these two variables), and how strongly the number of colours predicts the number of pairs in a pile, rather than just test the difference in mean pairs between the groups. 
+
+The null hypothesis is that there is *no relationship* between the number of colours in the pull and the number of pairs in the pile, while the alternate hypothesis is that the number of colours *influences* the number of pairs.
+
+```{r}
+# fit linear regression model
+lm_sim <- lm(n_pairs ~ n_colour, data = sim_dataset_results)
+
+# get coefficients
+summary(lm_sim)
+
+```
+
+The estimated coefficient for n_colour shows a *negative relationship* (Estimate = -0.219) between total pairs (n_pairs) and number of colours (n_colour). Specifically, this model estimates that for each additional colour in the pool, there is an expected 0.219 decrease in the number of pairs of socks in the pile.
+
+The p-value is also very small (<2e-16), so I reject the null hypothesis that there is no relationship between number of colours and number of pairs in the pile.
+
+The model fit (adjusted R-squared value) is 0.66, which in this case suggests that the number of colours in the pool is a strong predictor for number of pairs in this model (explains 66% of variance in total pairs of socks).
+
+Thus, I would say that there is a strong negative relationship between the number of colours in the pool and the number of sock pairs in a sampled pile.
+
+
+
+*3. Given these results train a statistical model and estimate how many pairs there will be when n = 30 (any type of model or machine learning algorithm). Is this answer accurate?*
+
+From the above question, we already have a linear regression model trained from the simulated dataset from n = 3 to n = 18. Thus, we can use the predict() function to extrapolate how many pairs there will be when n = 30. 
+
+```{r}
+newpool <- data.frame(n_colour = 30)
+predict(lm_sim, newdata = newpool, interval = "predict")
+
+```
+
+In this model (lm_sim), the 95% prediction interval of number of pairs when n = 30 is between 4.89 and 1.75 pairs.
+
+To test the accuracy of this model, I will generate a simulated test dataset where n = 30 and quantify the differences between the predicted mean and observed mean of total pairs.
+
+```{r}
+# Set seed
+set.seed(123)
+
+# generate test dataset
+sock_colours <- replicate(100, round(runif(20, 1,30),0), simplify = FALSE)
+pile_num <- 1:100
+n_colour <- rep(30, times=100)
+
+sim_dataset_n30 <- tibble(
+  sock_colours,
+  pile_num,
+  n_colour
+)
+
+test_data <- sim_dataset_n30 %>% 
+  dplyr::mutate(total_pairs = purrr::map_int(sock_colours, get_n_pairs))
+
+test_data %>% 
+  head() %>% 
+  knitr::kable()
+```
+
+```{r}
+# add to earlier box plot
+sim_dataset_results %>% 
+  bind_rows(test_data %>% dplyr::rename(n_pairs = total_pairs)) %>% 
+  dplyr::mutate(n_colour = as.factor(n_colour)) %>% 
+  ggplot(aes(x = n_colour, y = n_pairs, colour = n_colour)) +
+  geom_boxplot() +
+  geom_jitter(height = 0, width = 0.3, alpha = 0.3)+ # add jitter for visualization
+  stat_summary(fun.y=mean, geom="point", shape=18, size=5, color="black")+ # visualize mean total pairs per n_colour
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  labs(title = "Distribution of total pairs against number of sock colours per pool",
+    x = "Number of colours per pool, n",
+       y = "Number of total sock pairs per pile",
+       colour = "Pool colour (n)")
+
+```
+
+
+
+```{r}
+# Add predicted total pairs to simulated dataset
+predict_data <- test_data %>% 
+  dplyr::mutate(total_pairs_pred = predict(lm_sim, newdata = .))
+
+# Compare means between observed and predicted total pairs
+predict_data %>%
+  summarise(
+    observed_mean = mean(total_pairs),
+    predicted_mean = mean(total_pairs_pred),
+    RMSE = sqrt(mean((total_pairs - total_pairs_pred)^2))
+  )
+
+```
+
+This model predicts that at n = 30 colours, the average number of pairs in a pile of 20 socks would be 3.32 pairs. Comparing this with a newly generated test dataset for n = 30, we observe an average of 4.42 pairs. This suggests that the model underestimates the number of pairs when n values are high. This is further confirmed by the RMSE (root mean squared error) at 1.69 pairs, which is a significant prediction error considering that this is around 38% of the observed mean. 
+
+In retrospect, a linear regression model assumes a constant rate of change, while the sock problem is actually non-linearly decreasing. As the number of colours increases, the probability of pulling matching pairs decreases rapidly then levels off, producing an asymptotic curve. Thus, a linear regression model trained between n = 3 - 18 would underpredict at larger n values like n = 30. 
+
+A non-linear regression model may be more appropriate to describe this process.
+
+
+
+
