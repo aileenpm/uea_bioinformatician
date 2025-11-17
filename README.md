@@ -18,7 +18,7 @@ This repository stores my code for the interview questions for the Senior Resear
 To submit parallelised jobs for RNA-seq alignment, I use the command `bash run-master.sh list-of-fastq-files.txt`.
 
 #### Summary of master.slurm
-![Summary of miRNA identification pipeline and tools/databases referenced.](pipeline.png)
+![Summary of miRNA identification pipeline and tools/databases referenced.](HPC_script/pipeline.png)
 
 ### timeseries_clustering
 
